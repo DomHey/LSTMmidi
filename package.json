@@ -1,0 +1,17 @@
+{
+  "name": "midi",
+  "version": "1.0.0",
+  "description": "",
+  "main": "parseMidi.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "fs": "0.0.1-security",
+    "quick-sort": "^0.2.1",
+    "quicksort": "^1.1.1",
+    "sys": "0.0.1"
+  }
+}
