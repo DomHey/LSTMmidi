@@ -1,9 +1,11 @@
 const fs = require('fs')
 const qs = require('quick-sort')
+const synaptic = require('synaptic')
 var sys = require('sys')
 var exec = require('child_process').execSync
 let globalIOKeys = []
 let trainingsSet = []
+let finalHeaderSpeed = 0
 
 var walk = function(dir, done) {
   var results = []
@@ -137,7 +139,7 @@ function generateTrainingSet() {
 	  	if(path.indexOf(".txt") == -1) continue;
 	  	parseTextMidi(path)
 	  }
-	  console.log(trainingsSet)
+	  createNeuronalNetwork()
 	})
 }
 
@@ -145,6 +147,8 @@ function parseTextMidi(path) {
 	let midiText = fs.readFileSync(path, "UTF-8")
 	let finalMidiLines = {}
 	let midiLines = midiText.split('\n')
+	let headerSpeed = midiLines[0]
+	finalHeaderSpeed = parseInt(headerSpeed.split(",")[5])
 	for (var i = 0; i < midiLines.length; i++) {
 		let line = midiLines[i]
 		if(line.indexOf("Note") == -1) {
@@ -219,6 +223,112 @@ function parseTextMidi(path) {
 	}
 }
 
+function createNeuronalNetwork() {
+	console.log(`different inputs: ${globalIOKeys.length}`)
+	console.log("creating neuronal net")
+	let LSTM = new synaptic.Architect.LSTM(globalIOKeys.length, 1, globalIOKeys.length)
+	console.log("created neuronal net")
+
+	let trainer = new synaptic.Trainer(LSTM)
+	let LSTMTrainingsset = []
+
+	for (var i = trainingsSet.length - 1; i >= 0; i--) {
+		let entry = trainingsSet[i]
+		let a = createEmptyArrayInput()
+		outputIndex = entry[1]
+        let inputArray = entry[0]
+        for (var j = inputArray.length - 1; j >= 0; j--) {
+        	let ind = inputArray[j]
+        	a[ind] = 1
+        }
+
+        let b = createEmptyArrayInput()
+        b[outputIndex] = 1
+
+        LSTMTrainingsset.push({input:a, output: b})
+	}
+
+	trainer.train(LSTMTrainingsset, {
+		rate: 0.1,
+		iterations: 10,
+		error: 0.01,
+		shuffle: true,
+		log: 1,
+		cost: synaptic.Trainer.cost.CROSS_ENTROPY
+	})
+
+	generateMusic(LSTM)
+
+}
+
+function generateMusic(network) {
+	let musicArray = []
+
+	let n1 = getRandomInt(0, globalIOKeys.length)
+	let n2 = getRandomInt(0, globalIOKeys.length)
+	let n3 = getRandomInt(0, globalIOKeys.length)
+
+	musicArray.push(n1)
+	musicArray.push(n2)
+	musicArray.push(n3)
+
+	for (var i = 0; i < 200; i++) {
+		console.log(`generated : ${i} note`)
+		let inp = createEmptyArrayInput()
+		inp[musicArray[i]] = 1
+		inp[musicArray[i+1]] = 1
+		inp[musicArray[i+2]] = 1
+
+		let prediction = network.activate(inp)
+
+		let max = Math.max.apply(null, prediction)
+		musicArray.push(prediction.indexOf(max))
+
+	}
+
+	convertMusicArrayToText(musicArray)
+
+}
+
+function convertMusicArrayToText(musicArray) {
+	let genMusicText = `0, 0, Header, 1, 1, ${finalHeaderSpeed}\n1, 0, Start_track\n`
+	let currentTick = 0
+	for (var i = 0; i < musicArray.length; i++) {
+		let encodedNote = globalIOKeys[musicArray[i]]
+		let noteParts = encodedNote.split("|")
+		let tickDelta = 0
+		for (var j = 0; j < noteParts.length; j=j+4) {
+			tickDelta = parseInt(noteParts[j])
+			let calcTick = currentTick+tickDelta
+			let cIndi = parseInt(noteParts[j+1])
+			let note = parseInt(noteParts[j+2])
+			let velo = parseInt(noteParts[j+3])
+			if(cIndi == 1) {
+				cIndi = "Note_on_c"
+			} else {
+				cIndi = "Note_off_c"
+			}
+			genMusicText+=`1, ${calcTick}, ${cIndi}, 0, ${note}, ${velo}\n`
+		}
+		currentTick = currentTick+tickDelta
+	}
+	genMusicText+=`1, ${currentTick}, End_track\n0, 0, End_of_file`
+
+	fs.writeFileSync("./generatedMusic.txt", genMusicText)
+	exec(`csvmidi "generatedMusic.txt" "generatedMusic.mid"`)
+
+}
+
+function createEmptyArrayInput() {
+	let a = []
+
+	for (var i = globalIOKeys.length - 1; i >= 0; i--) {
+		a.push(0)
+	}
+
+	return a
+}
+
 
 function pad(n) {
 	if(n < 10) {
@@ -230,4 +340,8 @@ function pad(n) {
 	}
 
 	return n
+}
+
+function getRandomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
