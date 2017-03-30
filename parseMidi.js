@@ -226,7 +226,7 @@ function parseTextMidi(path) {
 function createNeuronalNetwork() {
 	console.log(`different inputs: ${globalIOKeys.length}`)
 	console.log("creating neuronal net")
-	let LSTM = new synaptic.Architect.LSTM(1, 20, 20, 1)
+	let LSTM = new synaptic.Architect.LSTM(globalIOKeys.length, 5, 1)
 	console.log("created neuronal net")
 
 	let trainer = new synaptic.Trainer(LSTM)
@@ -234,32 +234,32 @@ function createNeuronalNetwork() {
 
 	for (var i = trainingsSet.length - 1; i >= 0; i--) {
 		let entry = trainingsSet[i]
-		/*let a = createEmptyArrayInput()
-		outputIndex = entry[1]
+		let a = createEmptyArrayInput()
+		//outputIndex = entry[1]
         let inputArray = entry[0]
         for (var j = inputArray.length - 1; j >= 0; j--) {
         	let ind = inputArray[j]
         	a[ind] = 1
         }
 
-        let b = createEmptyArrayInput()
+        /*let b = createEmptyArrayInput()
         b[outputIndex] = 1*/
 
         let b = (entry[1]/globalIOKeys.length)
-        let a = 0
+        /*let a = 0
         let inputArray = entry[0]
         for (var j = inputArray.length - 1; j >= 0; j--) {
         	let ind = inputArray[j]
         	a+= (ind/(3*globalIOKeys.length))
-        }
+        }*/
 
-        LSTMTrainingsset.push({input:[a], output: [b]})
+        LSTMTrainingsset.push({input: a, output: [b]})
 	}
 
 
 	trainer.train(LSTMTrainingsset, {
 		rate: 0.1,
-		iterations: 500,
+		iterations: 5,
 		error: 0.01,
 		shuffle: true,
 		log: 1,
@@ -284,26 +284,26 @@ function generateMusic(network) {
 
 	let temppred = 0
 
-	for (var i = 0; i < 30; i++) {
+	for (var i = 0; i < 100; i++) {
 		//console.log(`generated : ${i} note`)
-		/*let inp = createEmptyArrayInput()
+		let inp = createEmptyArrayInput()
 		inp[musicArray[i]] = 1
 		inp[musicArray[i+1]] = 1
 		inp[musicArray[i+2]] = 1
 
-		let prediction = network.activate(inp)
+		/*let prediction = network.activate(inp)
 
 		let max = Math.max.apply(null, prediction)
 		musicArray.push(prediction.indexOf(max))*/
 
-		let inp = 0
+		/*let inp = 0
 		inp += (musicArray[i]/(3*globalIOKeys.length))
 		inp += (musicArray[i+1]/(3*globalIOKeys.length))
-		inp += (musicArray[i+2]/(3*globalIOKeys.length))
+		inp += (musicArray[i+2]/(3*globalIOKeys.length))*/
 
-		let prediction = network.activate([inp])
+		let prediction = network.activate(inp)
 		let index = Math.floor(prediction*globalIOKeys.length)
-		console.log(index)
+		//console.log(`${inp} | ${prediction} | ${index}`)
 		musicArray.push(index)
 
 	}
