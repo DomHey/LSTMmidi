@@ -102,7 +102,7 @@ function createCSVMidi(path, text) {
 	let newPath = path.replace(oldFilename, `${oldFilename.split(".")[0]}.txt`)
 
 	fs.writeFileSync(`./convertedMidi/${oldFilename.split(".")[0]}.txt`, newMidiFile)
-	exec(`csvmidi "convertedMidi/${oldFilename.split(".")[0]}.txt" "convertedMidi/${oldFilename.split(".")[0]}.mid"`)
+	//exec(`csvmidi "convertedMidi/${oldFilename.split(".")[0]}.txt" "convertedMidi/${oldFilename.split(".")[0]}.mid"`)
 }
 
 function encodeMidiNote(note, i, keys) {
@@ -226,7 +226,7 @@ function parseTextMidi(path) {
 function createNeuronalNetwork() {
 	console.log(`different inputs: ${globalIOKeys.length}`)
 	console.log("creating neuronal net")
-	let LSTM = new synaptic.Architect.LSTM(globalIOKeys.length, 1, globalIOKeys.length)
+	let LSTM = new synaptic.Architect.LSTM(1, 20, 20, 1)
 	console.log("created neuronal net")
 
 	let trainer = new synaptic.Trainer(LSTM)
@@ -234,7 +234,7 @@ function createNeuronalNetwork() {
 
 	for (var i = trainingsSet.length - 1; i >= 0; i--) {
 		let entry = trainingsSet[i]
-		let a = createEmptyArrayInput()
+		/*let a = createEmptyArrayInput()
 		outputIndex = entry[1]
         let inputArray = entry[0]
         for (var j = inputArray.length - 1; j >= 0; j--) {
@@ -243,20 +243,30 @@ function createNeuronalNetwork() {
         }
 
         let b = createEmptyArrayInput()
-        b[outputIndex] = 1
+        b[outputIndex] = 1*/
 
-        LSTMTrainingsset.push({input:a, output: b})
+        let b = (entry[1]/globalIOKeys.length)
+        let a = 0
+        let inputArray = entry[0]
+        for (var j = inputArray.length - 1; j >= 0; j--) {
+        	let ind = inputArray[j]
+        	a+= (ind/(3*globalIOKeys.length))
+        }
+
+        LSTMTrainingsset.push({input:[a], output: [b]})
 	}
+
 
 	trainer.train(LSTMTrainingsset, {
 		rate: 0.1,
-		iterations: 10,
+		iterations: 500,
 		error: 0.01,
 		shuffle: true,
 		log: 1,
 		cost: synaptic.Trainer.cost.CROSS_ENTROPY
 	})
 
+	console.log("done training")
 	generateMusic(LSTM)
 
 }
@@ -272,9 +282,11 @@ function generateMusic(network) {
 	musicArray.push(n2)
 	musicArray.push(n3)
 
-	for (var i = 0; i < 200; i++) {
-		console.log(`generated : ${i} note`)
-		let inp = createEmptyArrayInput()
+	let temppred = 0
+
+	for (var i = 0; i < 30; i++) {
+		//console.log(`generated : ${i} note`)
+		/*let inp = createEmptyArrayInput()
 		inp[musicArray[i]] = 1
 		inp[musicArray[i+1]] = 1
 		inp[musicArray[i+2]] = 1
@@ -282,10 +294,20 @@ function generateMusic(network) {
 		let prediction = network.activate(inp)
 
 		let max = Math.max.apply(null, prediction)
-		musicArray.push(prediction.indexOf(max))
+		musicArray.push(prediction.indexOf(max))*/
+
+		let inp = 0
+		inp += (musicArray[i]/(3*globalIOKeys.length))
+		inp += (musicArray[i+1]/(3*globalIOKeys.length))
+		inp += (musicArray[i+2]/(3*globalIOKeys.length))
+
+		let prediction = network.activate([inp])
+		let index = Math.floor(prediction*globalIOKeys.length)
+		console.log(index)
+		musicArray.push(index)
 
 	}
-
+	//console.log(musicArray)
 	convertMusicArrayToText(musicArray)
 
 }
