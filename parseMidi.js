@@ -3,9 +3,11 @@ const qs = require('quick-sort')
 const synaptic = require('synaptic')
 var sys = require('sys')
 var exec = require('child_process').execSync
+var aexec = require('child_process').exec
 let globalIOKeys = []
 let trainingsSet = []
 let finalHeaderSpeed = 0
+let epoch = 0
 
 var walk = function(dir, done) {
   var results = []
@@ -98,11 +100,10 @@ function createCSVMidi(path, text) {
 
 	let oldFilename = path.split("/")
 	oldFilename = oldFilename[oldFilename.length-1]
-	console.log(oldFilename)
 	let newPath = path.replace(oldFilename, `${oldFilename.split(".")[0]}.txt`)
 
 	fs.writeFileSync(`./convertedMidi/${oldFilename.split(".")[0]}.txt`, newMidiFile)
-	exec(`csvmidi "convertedMidi/${oldFilename.split(".")[0]}.txt" "convertedMidi/${oldFilename.split(".")[0]}.mid"`)
+	//exec(`csvmidi "convertedMidi/${oldFilename.split(".")[0]}.txt" "convertedMidi/${oldFilename.split(".")[0]}.mid"`)
 }
 
 function encodeMidiNote(note, i, keys) {
@@ -139,7 +140,9 @@ function generateTrainingSet() {
 	  	if(path.indexOf(".txt") == -1) continue;
 	  	parseTextMidi(path)
 	  }
-	  createNeuronalNetwork()
+	  fs.writeFileSync("keys.txt", JSON.stringify(globalIOKeys))
+	  fs.writeFileSync("trainingsSet.txt", JSON.stringify(trainingsSet))
+	  runPytonNetwork()
 	})
 }
 
@@ -223,72 +226,40 @@ function parseTextMidi(path) {
 	}
 }
 
-function createNeuronalNetwork() {
-	console.log(`different inputs: ${globalIOKeys.length}`)
-	console.log("creating neuronal net")
-	let LSTM = new synaptic.Architect.LSTM(globalIOKeys.length, 1, globalIOKeys.length)
-	console.log("created neuronal net")
+function runPytonNetwork() {
+	const spawn = require('child_process').spawn;
+	const scriptExecution = spawn("python3", ["tensorNetwork.py"])
 
-	let trainer = new synaptic.Trainer(LSTM)
-	let LSTMTrainingsset = []
-
-	for (var i = trainingsSet.length - 1; i >= 0; i--) {
-		let entry = trainingsSet[i]
-		let a = createEmptyArrayInput()
-		outputIndex = entry[1]
-        let inputArray = entry[0]
-        for (var j = inputArray.length - 1; j >= 0; j--) {
-        	let ind = inputArray[j]
-        	a[ind] = 1
-        }
-
-        let b = createEmptyArrayInput()
-        b[outputIndex] = 1
-
-        LSTMTrainingsset.push({input:a, output: b})
-	}
-
-	trainer.train(LSTMTrainingsset, {
-		rate: 0.1,
-		iterations: 10,
-		error: 0.01,
-		shuffle: true,
-		log: 1,
-		cost: synaptic.Trainer.cost.CROSS_ENTROPY
+	// Handle normal output
+	scriptExecution.stdout.on('data', (data) => {
+	    let message = uint8arrayToString(data)
+	    if(message.indexOf("generation") != -1) {
+	    	epoch += 100
+	    	let midiText = fs.readFileSync("predictedNotes.txt", "UTF-8")
+			midiText = JSON.parse(midiText)
+			convertMusicArrayToText(midiText)
+	    } else {
+	    	console.log(message)
+	    }
 	})
 
-	generateMusic(LSTM)
+	// Handle error output
+	scriptExecution.stderr.on('data', (data) => {
+	    // As said before, convert the Uint8Array to a readable string.
+	    let message = uint8arrayToString(data)
+	    console.log(message)
+	})
 
+	scriptExecution.on('exit', (code) => {
+	    console.log(code) 
+	})
 }
 
-function generateMusic(network) {
-	let musicArray = []
-
-	let n1 = getRandomInt(0, globalIOKeys.length)
-	let n2 = getRandomInt(0, globalIOKeys.length)
-	let n3 = getRandomInt(0, globalIOKeys.length)
-
-	musicArray.push(n1)
-	musicArray.push(n2)
-	musicArray.push(n3)
-
-	for (var i = 0; i < 200; i++) {
-		console.log(`generated : ${i} note`)
-		let inp = createEmptyArrayInput()
-		inp[musicArray[i]] = 1
-		inp[musicArray[i+1]] = 1
-		inp[musicArray[i+2]] = 1
-
-		let prediction = network.activate(inp)
-
-		let max = Math.max.apply(null, prediction)
-		musicArray.push(prediction.indexOf(max))
-
-	}
-
-	convertMusicArrayToText(musicArray)
-
+var uint8arrayToString = function(data){
+    return String.fromCharCode.apply(null, data);
 }
+
+
 
 function convertMusicArrayToText(musicArray) {
 	let genMusicText = `0, 0, Header, 1, 1, ${finalHeaderSpeed}\n1, 0, Start_track\n`
@@ -315,7 +286,7 @@ function convertMusicArrayToText(musicArray) {
 	genMusicText+=`1, ${currentTick}, End_track\n0, 0, End_of_file`
 
 	fs.writeFileSync("./generatedMusic.txt", genMusicText)
-	exec(`csvmidi "generatedMusic.txt" "generatedMusic.mid"`)
+	exec(`csvmidi "generatedMusic.txt" "./generatedMusic/generatedMusic_${epoch}.mid"`)
 
 }
 
